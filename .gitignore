@@ -1,0 +1,14 @@
+# Private keys
+config/keys.toml
+
+# Python environment and caches
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+
+# Downloaded and test data (large, re-creatable from the notebooks)
+data/raw/
+data/test/
+
+# earthaccess login helper (paths to login files)
+.dodsrc
