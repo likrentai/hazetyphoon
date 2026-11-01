@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smoke in the Typhoon Zone</title>
+<meta name="description" content="The 2026 Indonesian fire haze reaching the western Pacific, where typhoons form and travel. Model smoke, wind, fires and storm tracks on a globe.">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+<script src="https://unpkg.com/deck.gl@9.4.0/dist.min.js"></script>
+<style>
+  :root {
+    --space: #070a10;
+    --panel: rgba(16, 18, 24, 0.84);
+    --line: rgba(220, 180, 130, 0.22);
+    --text: #f1ece4;
+    --muted: #a69c8f;
+    --haze: #f08c2e;
+    --storm: #5cc8ff;
+    --fire: #ff5a3c;
+  }
+  html, body { margin: 0; height: 100%; background: var(--space); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  #map { position: absolute; inset: 0; }
+  .panel { position: absolute; left: 16px; top: 16px; width: 316px; padding: 16px 18px; max-height: calc(100vh - 64px); overflow-y: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(6px); box-sizing: border-box; }
+  h1 { font-size: 18px; margin: 0 0 4px; letter-spacing: 0.02em; }
+  .sub { font-size: 12px; color: var(--muted); margin: 0 0 12px; line-height: 1.4; }
+  .switch { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: 12px; }
+  .switch button { flex: 1; border: 0; border-radius: 0; background: transparent; color: var(--muted); padding: 7px 6px; }
+  .switch button.on { background: rgba(240, 140, 46, 0.22); color: var(--text); }
+  .when { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .when small { font-size: 15px; font-weight: 500; color: var(--muted); margin-left: 6px; }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 10px; margin: 6px 0 2px; border: 1px solid var(--storm);
+    color: var(--storm); visibility: hidden; }
+  .tag.on { visibility: visible; }
+  .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 13px; }
+  .sw { width: 22px; height: 4px; border-radius: 2px; flex: none; }
+  .sw.dot { width: 9px; height: 9px; border-radius: 50%; margin: 0 6px 0 7px; }
+  .val { margin-left: auto; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .val i { font-style: normal; color: var(--muted); font-size: 11px; }
+  .legend { margin: 10px 0 4px; }
+  .legend .ramp { display: flex; height: 10px; border-radius: 3px; overflow: hidden; }
+  .legend .ramp i { flex: 1; }
+  .legend .ticks { position: relative; height: 14px; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .legend .ticks span { position: absolute; transform: translateX(-50%); top: 2px; }
+  .legend .cap { font-size: 11px; color: var(--muted); }
+  .ctrl { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+  button { background: #2a2118; color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  input[type=range] { flex: 1; accent-color: var(--haze); }
+  .places { margin-top: 10px; }
+  .pl { display: grid; grid-template-columns: 92px 1fr 54px; align-items: center; gap: 8px; font-size: 12px; margin: 5px 0; }
+  .pl .bar { position: relative; height: 8px; border-radius: 4px; background: rgba(220, 180, 130, 0.14); }
+  .pl .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: var(--haze); }
+  .pl .bar u { position: absolute; top: -3px; bottom: -3px; width: 1.5px; background: var(--text); opacity: 0.7; }
+  .pl b { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .spark { margin-top: 12px; }
+  .spark .lab { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+  .spark svg { display: block; width: 100%; height: 54px; cursor: pointer; }
+  details.facts { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+  details.facts summary { font-size: 12px; color: var(--muted); cursor: pointer; letter-spacing: 0.04em; text-transform: uppercase; }
+  .fig { display: flex; gap: 10px; align-items: baseline; margin-top: 10px; }
+  .fig b { font-size: 19px; font-variant-numeric: tabular-nums; min-width: 96px; white-space: nowrap; }
+  .fig span { font-size: 12px; color: var(--muted); line-height: 1.35; }
+  .note { font-size: 11px; color: var(--muted); margin-top: 12px; line-height: 1.4; }
+  .note a { color: var(--muted); }
+  .lbl { font-size: 12px; color: var(--text); text-shadow: 0 0 3px #000, 0 0 3px #000; white-space: nowrap; pointer-events: none; }
+  .lbl.box { font-size: 11px; color: #ffd7a8; }
+  .lbl.storm { color: #d8f2ff; font-weight: 600; }
+  .maplibregl-ctrl-attrib { background: rgba(7, 10, 16, 0.7) !important; color: var(--muted); }
+  .maplibregl-ctrl-attrib a { color: var(--muted) !important; }
+  .maplibregl-ctrl-attrib-button { filter: invert(1); }
+  .caption { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); max-width: 540px; width: calc(100% - 720px);
+    min-width: 320px; padding: 12px 16px; background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--haze);
+    border-radius: 10px; font-size: 15px; line-height: 1.45; opacity: 0; transition: opacity 0.4s; pointer-events: none; box-sizing: border-box; }
+  .caption.on { opacity: 1; }
+  .caption.storm { border-left-color: var(--storm); }
+  .panel, .caption { z-index: 4; }
+  .panel { scrollbar-width: thin; scrollbar-color: rgba(220, 180, 130, 0.35) transparent; }   /* a slim dark scroll bar instead of the white default */   /* above the wind and fire layer */
+  .tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+    padding: 4px 8px; font-size: 12px; display: none; white-space: nowrap; z-index: 5; }
+  .viewtile { position: absolute; right: 16px; bottom: 40px; width: 104px; height: 104px; border-radius: 12px; overflow: hidden;
+    border: 1px solid var(--line); background: #0a1424; cursor: pointer; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5); color: var(--text);
+    text-decoration: none; transition: transform 0.15s, border-color 0.15s; z-index: 3; }
+  .viewtile:hover { transform: scale(1.05); border-color: var(--haze); }
+  .viewtile canvas { width: 100%; height: 100%; display: block; }
+  .viewtile span { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 9px 7px; font-size: 13px; font-weight: 600;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.8)); display: flex; justify-content: space-between; }
+  @media (max-width: 768px) { .viewtile { display: none; } }
+  @media (max-width: 600px) {
+    .panel { left: 8px; right: 8px; top: auto; bottom: 8px; width: auto; padding: 12px; max-height: 46vh; }
+    .caption { left: 8px; right: 8px; top: 8px; bottom: auto; transform: none; width: auto; min-width: 0; max-width: none; font-size: 13px; padding: 9px 12px; }
+    .sub, .legend .cap { display: none; }
+    .when { font-size: 20px; }
+    h1 { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="panel">
+  <h1>Smoke in the Typhoon Zone</h1>
+  <p class="sub">The 2026 Indonesian fire haze reached far into the western Pacific, where typhoons form and travel. Model smoke near the ground, wind, fires and storms.</p>
+  <div class="switch">
+    <button id="mEvent" class="on">Choi-wan event</button>
+    <button id="mSeason">2026 season</button>
+  </div>
+  <div class="when" id="when">28 Sep<small>01:30 UTC</small></div>
+  <span class="tag" id="tyTag">Typhoon in the Philippine Sea</span>
+  <div class="legend">
+    <div class="ramp" id="ramp"></div>
+    <div class="ticks" id="ticks"></div>
+    <div class="cap">Smoke PM2.5 near the ground (micrograms per m³, GEOS-FP model)</div>
+  </div>
+  <div class="row"><span class="sw dot" style="background:var(--fire)"></span>Fire hotspots<span class="val" id="vFire"></span></div>
+  <div class="row"><span class="sw" style="background:rgba(255,255,255,0.75)"></span><span id="windTxt">Wind at 850 hPa (about 1.5 km up)</span></div>
+  <div class="row"><span class="sw" style="background:var(--storm)"></span>Storm tracks<span class="val" id="vStorm"></span></div>
+  <div id="eventBox">
+    <div class="row"><span class="sw" style="background:#ffd7a8; height:2px"></span>Smoke area, Pacific corridor<span class="val" id="vArea"></span></div>
+  </div>
+  <div id="seasonBox" class="places" style="display:none"></div>
+  <div class="spark">
+    <div class="lab"><span id="sparkTitle"></span><span id="sparkVal"></span></div>
+    <svg id="spark" viewBox="0 0 280 54" preserveAspectRatio="none" role="img"></svg>
+  </div>
+  <div class="ctrl">
+    <button id="play">Pause</button>
+    <input id="slider" type="range" min="0" max="79" step="0.01" value="0" aria-label="Time">
+  </div>
+  <details class="facts" id="facts">
+    <summary>The haze in numbers</summary>
+    <div id="factList"></div>
+  </details>
+  <div class="note">Smoke = organic, brown and black carbon in NASA's GEOS-FP model, which reads about 1.8 times higher than Singapore's monitors (correlation 0.84).
+    Wind: ERA5. Fires: NASA FIRMS VIIRS. Storms: IBTrACS. The project shows how far the smoke spread; it does not claim the smoke changed the storms.
+    <br><a href="cesium.html">3D version (desktop)</a></div>
+</div>
+<div class="caption" id="caption"></div>
+<a class="viewtile" id="viewTile" href="cesium.html" title="Open the same moment on the 3D globe (desktop)"><canvas id="tileCanvas" width="208" height="208"></canvas><span>3D view<b>↗</b></span></a>
+<div class="tip" id="tip"></div>
+<script>
+// ---------- Section 0: settings ----------
+const SETTINGS = {
+  basemap: "bluemarble",             // <- "bluemarble" (NASA GIBS imagery) or "plain" (ocean colour only)
+  oceanColor: "#0a1424",             // <- VISUAL
+  framesPerSecond: { event: 2, season: 0.5 },   // <- animation speed: 4 means 4 frames a second; 3 means 3 days a second
+  startMode: "event",                // <- "event" or "season"
+  windTrailHours: { event: 6, season: 16 },    // <- VISUAL: length of each moving wind streak, in hours
+  windColor: [255, 255, 255],        // <- VISUAL
+  windAlpha: 150,                    // <- VISUAL: 0 to 255
+  windWidth: 1.2,                    // <- VISUAL: pixels
+  fireColor: [255, 90, 60],          // <- VISUAL
+  fireRadius: [1, 3.5],              // <- VISUAL: smallest and largest hotspot dot, pixels
+  stormColor: [92, 200, 255],        // <- VISUAL
+  stormKeepHours: 36,                // <- how long a storm stays on the map after its last track point
+  smokeOpacity: 0.95,                // <- VISUAL: smoke layer opacity
+  faintSmoke: [0.25, 0.5, 0.8],      // <- VISUAL: extra see-through for the three faintest colour steps (1, 2, 5), 1 = as in the pictures
+  edgeFade: 3,                       // <- VISUAL: degrees over which the smoke fades out at the edge of the data area
+  corridor: [128, 150, 3, 18],       // <- the Pacific corridor box (west, east, south, north), as in notebooks 02 and 06
+  showCorridor: true,
+  whoDaily: 15,                      // <- WHO 24-hour PM2.5 guideline, drawn as a tick on the place bars
+  placeMax: 120,                     // <- VISUAL: micrograms per m3 at the right end of the place bars
+  camera: { center: [124, 9], zoom: 2.75, pitch: 0, bearing: 0 },    // <- start view
+  phoneCamera: { center: [126, 8], zoom: 1.9 },                     // <- start view on phones (narrower than 600 px)
+  phonePanelSpace: 380,              // <- VISUAL: pixels kept free for the panel on phones
+  labels: [                          // <- VISUAL: place names (lon, lat, name, offset in pixels, show on phones)
+    [101.0, 0.5, "Sumatra", [-30, 0], false], [113.5, -1.0, "Kalimantan", [-34, 0], false], [101.7, 3.15, "Kuala Lumpur", [2, -14]],
+    [103.8, 1.35, "Singapore", [8, 4]], [128.0, -4.0, "Eastern Indonesia", [-50, 0]],
+  ],
+  facts: [                           // <- the numbers in "The haze in numbers"
+    ["1st of 24", "smokiest August to September in the Pacific corridor since 2003 (NASA MERRA-2), ahead of 2015."],
+    ["2.7M km²", "of the Pacific corridor under smoke at the peak of the Choi-wan event, up from 1.2 million."],
+    ["~200 km", "closest the smoke edge came to Choi-wan's centre."],
+    ["161,800 t", "of smoke carried into the corridor during the event; about half was washed out by rain."],
+    ["+29%", "more smoke flows into the corridor on typhoon days across the season (+80% in El Niño years)."],
+    ["17-45M", "people in Indonesia breathing unhealthy fire smoke on the worst day (range across four methods)."],
+  ],
+  // <- Captions: shown from "at" (UTC, as in the time line) for "hours". Set storm: true for the blue edge.
+  captions: {
+    event: [
+      { at: "2026-09-28 01:30", hours: 15, text: "Late September: fires burn across Sumatra, Kalimantan and eastern Indonesia. Smoke already lies over the seas between them." },
+      { at: "2026-09-30 01:30", hours: 15, storm: true, text: "A new storm forms east of the Philippines. It will become Super Typhoon Choi-wan." },
+      { at: "2026-10-02 04:30", hours: 18, text: "Winds turn towards the storm. Smoke from eastern Indonesia streams north-east over the open Pacific." },
+      { at: "2026-10-03 07:30", hours: 15, storm: true, text: "3 October: the smoke streamer is drawn into Choi-wan's circulation, the scene seen on earth.nullschool.net." },
+      { at: "2026-10-04 13:30", hours: 12, storm: true, text: "Choi-wan peaks at 134 kt. The smoke edge comes within about 200 km of its centre." },
+      { at: "2026-10-05 22:30", hours: 18, text: "Smoke covers 2.7 million km² of the Pacific corridor, more than twice the area at the start." },
+    ],
+    season: [
+      { at: "2026-08-01", hours: 120, text: "August 2026: a strong El Niño and a dry season. Fires start to spread across Indonesia." },
+      { at: "2026-08-25", hours: 120, text: "Smoke builds over Sumatra, Kalimantan, Kuala Lumpur and Singapore." },
+      { at: "2026-09-15", hours: 120, storm: true, text: "Each typhoon in the Philippine Sea pulls air, and smoke, north-east from eastern Indonesia. On typhoon days, 29% more smoke flows into the corridor." },
+      { at: "2026-10-03", hours: 96, storm: true, text: "Choi-wan draws the eastern Indonesian smoke into the Pacific." },
+      { at: "2026-10-11", hours: 168, text: "Mid October: the worst days for Kuala Lumpur and Singapore, and for the Pacific corridor too." },
+    ],
+  },
+};
+// -----------------------------------------
+
+const isPhone = window.innerWidth < 600;
+const q = new URLSearchParams(location.search);
+let mode = q.get("mode") === "season" || q.get("mode") === "event" ? q.get("mode") : SETTINGS.startMode;
+let t = 0, playing = true, last = null;
+const D = {};     // per mode: meta, wind, fires, images
+const $ = id => document.getElementById(id);
+
+// ---------- basemap ----------
+const sources = {}, layers = [{ id: "bg", type: "background", paint: { "background-color": SETTINGS.oceanColor } }];
+if (SETTINGS.basemap === "bluemarble") {
+  sources.bm = { type: "raster", tileSize: 256, maxzoom: 8,
+    tiles: ["https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg"],
+    attribution: '<a href="https://www.earthdata.nasa.gov/gibs" target="_blank">Imagery: NASA Blue Marble via GIBS</a>' };
+  layers.push({ id: "bm", type: "raster", source: "bm", paint: { "raster-brightness-max": 0.8, "raster-saturation": -0.25 } });
+}
+const map = new maplibregl.Map({
+  container: "map",
+  style: { version: 8, projection: { type: "globe" }, sources, layers,
+    sky: { "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 7, 0] } },
+  ...SETTINGS.camera, ...(isPhone ? SETTINGS.phoneCamera : {}),
+  attributionControl: false,
+});
+map.addControl(new maplibregl.AttributionControl({ compact: isPhone,
+  customAttribution: "Smoke: NASA GEOS-FP · Wind: ERA5 (Copernicus) · Fires: NASA FIRMS · Storms: IBTrACS" }), isPhone ? "top-right" : "bottom-right");
+if (isPhone) map.setPadding({ top: 0, bottom: SETTINGS.phonePanelSpace, left: 0, right: 0 });
+
+// ---------- smoke: one small canvas, blended between the two nearest frames ----------
+const canvas = document.createElement("canvas");
+const ctx = canvas.getContext("2d", { willReadFrequently: true });   // CPU canvas: much faster to hand to WebGL every frame
+
+function drawSmoke() {
+  const d = D[mode], n = d.meta.n;
+  const i = Math.min(n - 1, Math.floor(t)), j = Math.min(n - 1, i + 1), f = t - i;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.globalCompositeOperation = "lighter";      // weights add up to 1: an even blend of the two frames
+  ctx.globalAlpha = 1 - f; ctx.drawImage(d.images[i], 0, 0);
+  if (f > 0.001) { ctx.globalAlpha = f; ctx.drawImage(d.images[j], 0, 0); }
+  ctx.globalAlpha = 1; ctx.globalCompositeOperation = "source-over";
+}
+
+// make the faintest smoke steps more see-through and fade the smoke out towards the edge of the data area
+function soften(im, meta) {
+  const c = document.createElement("canvas"); c.width = im.width; c.height = im.height;
+  const g = c.getContext("2d", { willReadFrequently: true }); g.drawImage(im, 0, 0);
+  const px = g.getImageData(0, 0, c.width, c.height), a = px.data;
+  const stepAlpha = meta.legend.map(s => s.rgba[3]), mult = {};
+  SETTINGS.faintSmoke.forEach((m, k) => { mult[stepAlpha[k]] = m; });
+  const b = meta.bounds, fx = SETTINGS.edgeFade / ((b.east - b.west) / c.width), fy = SETTINGS.edgeFade / ((b.north - b.south) / c.height);
+  for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+    const o = (y * c.width + x) * 4, al = a[o + 3];
+    if (!al) continue;
+    const edge = Math.min(1, Math.min(x, c.width - 1 - x) / fx, Math.min(y, c.height - 1 - y) / fy);
+    a[o + 3] = Math.round(al * (mult[al] ?? 1) * edge);
+  }
+  g.putImageData(px, 0, 0);
+  return c;
+}
+
+function smokeCorners(b) { return [[b.west, b.north], [b.east, b.north], [b.east, b.south], [b.west, b.south]]; }
+
+// ---------- the "3D view" tile: a small round globe showing the current smoke; a click opens the 3D page at the same moment ----------
+const tileCtx = $("tileCanvas").getContext("2d");
+function drawTile() {
+  const g = tileCtx, W = 208, r = 80, cx = 104, cy = 92;
+  g.clearRect(0, 0, W, W);
+  g.fillStyle = "#070a10"; g.fillRect(0, 0, W, W);
+  g.save(); g.shadowColor = "rgba(120, 190, 255, 0.9)"; g.shadowBlur = 16;
+  g.beginPath(); g.arc(cx, cy, r, 0, 2 * Math.PI); g.fillStyle = "#13304e"; g.fill(); g.restore();
+  g.save(); g.beginPath(); g.arc(cx, cy, r, 0, 2 * Math.PI); g.clip();
+  g.drawImage(canvas, cx - r * 0.95, cy - r * 0.95, r * 1.9, r * 1.9);
+  const shade = g.createRadialGradient(cx - 25, cy - 30, 10, cx, cy, r);   // a little shading so it reads as a ball
+  shade.addColorStop(0, "rgba(255,255,255,0.10)"); shade.addColorStop(0.7, "rgba(0,0,0,0)"); shade.addColorStop(1, "rgba(0,0,0,0.45)");
+  g.fillStyle = shade; g.fillRect(0, 0, W, W); g.restore();
+}
+$("viewTile").addEventListener("click", e => {
+  if (!D[mode]) return;
+  e.preventDefault();
+  location.href = "cesium.html?mode=" + mode + "&h=" + hoursAt(t).toFixed(2) + (playing ? "" : "&paused=1");
+});
+
+// ---------- data ----------
+const loading = {};
+function loadMode(m) { return loading[m] || (loading[m] = fetchMode(m)); }   // each set is fetched once
+async function fetchMode(m) {
+  const base = "data/" + m + "/";
+  const [meta, wind, fires] = await Promise.all(["meta", "wind", "fires"].map(k => fetch(base + k + ".json").then(r => r.json())));
+  const raw = await Promise.all(meta.times.map((_, i) => new Promise((ok, bad) => {
+    const im = new Image(); im.onload = () => ok(im); im.onerror = bad; im.src = base + "smoke_" + String(i).padStart(3, "0") + ".png";
+  })));
+  const images = raw.map(im => soften(im, meta));
+  const step = wind.step_hours;
+  const trips = wind.trails.map(([t0, xy]) => {
+    const path = [], ts = [];
+    for (let k = 0; k < xy.length; k += 2) { path.push([xy[k], xy[k + 1], 4000]); ts.push(t0 + (k / 2) * step); }
+    return { path, ts };
+  });
+  const fireMax = Math.max(1, ...Object.values(fires).flat().map(p => p[2]));
+  const t0ms = Date.parse(meta.start + "Z");
+  for (const st of meta.storms) st.name = st.name.replace(/-(\w)/g, (_, c) => "-" + c.toLowerCase());   // Choi-Wan -> Choi-wan
+  D[m] = { meta, trips, fires, fireMax, images, t0ms, windLevel: wind.level };
+  return D[m];
+}
+
+// ---------- time helpers ----------
+const hoursAt = tt => tt * D[mode].meta.step_hours;
+const dateAt = tt => new Date(D[mode].t0ms + hoursAt(tt) * 3600000);
+const dayKey = d => d.toISOString().slice(0, 10);
+
+function stormNow(s, h) {
+  const T = s.t_hours;
+  if (h < T[0] || h > T[T.length - 1] + SETTINGS.stormKeepHours) return null;
+  let lo = 0, hi = T.length - 1;
+  if (h >= T[hi]) return { lon: s.lon[hi], lat: s.lat[hi], wind: s.wind_kt[hi], k: hi, ended: true };
+  while (hi - lo > 1) { const mm = (lo + hi) >> 1; (T[mm] <= h ? lo = mm : hi = mm); }
+  const f = (h - T[lo]) / Math.max(1e-9, T[hi] - T[lo]);
+  const w0 = s.wind_kt[lo], w1 = s.wind_kt[hi];
+  return { lon: s.lon[lo] + (s.lon[hi] - s.lon[lo]) * f, lat: s.lat[lo] + (s.lat[hi] - s.lat[lo]) * f,
+    wind: w0 == null ? w1 : w1 == null ? w0 : w0 + (w1 - w0) * f, k: lo, ended: false };
+}
+
+// ---------- layers ----------
+const overlay = new deck.MapboxOverlay({ interleaved: false, layers: [] });   // its own layer above the map: "interleaved: true" drifted out of place after a window resize
+const corridorPath = (() => { const [w, e, s, n] = SETTINGS.corridor, p = [];
+  for (let x = w; x <= e; x += 1) p.push([x, s, 3000]); for (let y = s; y <= n; y += 1) p.push([e, y, 3000]);
+  for (let x = e; x >= w; x -= 1) p.push([x, n, 3000]); for (let y = n; y >= s; y -= 1) p.push([w, y, 3000]); return p; })();
+
+function render() {
+  const d = D[mode], h = hoursAt(t);
+  drawSmoke();
+  drawTile();
+  const day = dayKey(dateAt(t));
+  const fires = d.fires[day] || [];
+  const storms = [], tracks = [];
+  for (const s of d.meta.storms) {
+    const now = stormNow(s, h);
+    if (!now) continue;
+    const path = s.lon.slice(0, now.k + 1).map((x, i) => [x, s.lat[i], 20000]);
+    if (!now.ended) path.push([now.lon, now.lat, 20000]);
+    tracks.push({ path, ended: now.ended });
+    if (!now.ended) storms.push({ name: s.name, id: s.t_hours[0], p: [now.lon, now.lat, 30000], wind: now.wind });
+  }
+  const sc = SETTINGS.stormColor;
+  overlay.setProps({ layers: [
+    new deck.ScatterplotLayer({ id: "fires", data: fires, getPosition: p => [p[0], p[1], 2000],
+      getRadius: p => SETTINGS.fireRadius[0] + (SETTINGS.fireRadius[1] - SETTINGS.fireRadius[0]) * Math.sqrt(p[2] / d.fireMax),
+      radiusUnits: "pixels", getFillColor: [...SETTINGS.fireColor, 190], billboard: true,
+      updateTriggers: { getRadius: [mode] } }),
+    new deck.TripsLayer({ id: "wind-" + mode, data: d.trips, getPath: x => x.path, getTimestamps: x => x.ts,
+      getColor: [...SETTINGS.windColor, SETTINGS.windAlpha], widthMinPixels: SETTINGS.windWidth, fadeTrail: true,
+      trailLength: SETTINGS.windTrailHours[mode], currentTime: h, capRounded: true, jointRounded: true }),
+    new deck.PathLayer({ id: "corridor", data: SETTINGS.showCorridor ? [{ path: corridorPath }] : [], getPath: x => x.path,
+      getColor: [255, 215, 168, 140], widthMinPixels: 1.2, getDashArray: [4, 3] }),
+    new deck.PathLayer({ id: "tracks", data: tracks, getPath: x => x.path, getColor: x => [...sc, x.ended ? 70 : 170],
+      widthMinPixels: 2, capRounded: true, jointRounded: true }),
+    new deck.ScatterplotLayer({ id: "eyeGlow", data: storms, getPosition: x => x.p, getFillColor: [...sc, 60], billboard: true,
+      radiusUnits: "pixels", getRadius: x => 8 + (x.wind || 30) / 8 }),
+    new deck.ScatterplotLayer({ id: "eye", data: storms, getPosition: x => x.p, getFillColor: [255, 255, 255], billboard: true,
+      getLineColor: sc, stroked: true, lineWidthMinPixels: 2, radiusUnits: "pixels", getRadius: 4.5 }),
+  ] });
+  stormLabels(storms);
+  updatePanel(h, fires, storms);
+  updateCaption();
+}
+
+// storm names: HTML labels that follow each storm
+const labelPool = {};
+function stormLabels(storms) {
+  const seen = new Set();
+  for (const s of storms) {
+    const key = s.name + "|" + s.id;
+    seen.add(key);
+    let mk = labelPool[key];
+    if (!mk) {
+      const el = document.createElement("div"); el.className = "lbl storm";
+      mk = labelPool[key] = new maplibregl.Marker({ element: el, anchor: "left", offset: [11, -9] }).setLngLat([s.p[0], s.p[1]]).addTo(map);
+    }
+    mk.setLngLat([s.p[0], s.p[1]]);
+    mk.getElement().textContent = s.name + (s.wind ? " " + Math.round(s.wind) + " kt" : "");
+  }
+  for (const key in labelPool) if (!seen.has(key)) { labelPool[key].remove(); delete labelPool[key]; }
+}
+
+// ---------- panel ----------
+const fmtNum = (v, dp = 0) => v == null ? "-" : Number(v).toLocaleString("en-GB", { maximumFractionDigits: dp, minimumFractionDigits: dp });
+const PLACES = [["kl_smoke", "Kuala Lumpur"], ["sg_smoke", "Singapore"], ["sumatra_smoke", "Sumatra"], ["kalimantan_smoke", "Kalimantan"], ["corridor_smoke", "Pacific corridor"]];
+
+function buildPanel() {
+  const d = D[mode], m = d.meta;
+  $("mEvent").classList.toggle("on", mode === "event");
+  $("mSeason").classList.toggle("on", mode === "season");
+  $("eventBox").style.display = mode === "event" ? "" : "none";
+  $("seasonBox").style.display = mode === "season" ? "" : "none";
+  $("tyTag").style.display = mode === "season" ? "" : "none";
+  $("slider").max = m.n - 1;
+  $("windTxt").textContent = mode === "event" ? "Wind at 850 hPa (about 1.5 km up)" : "Wind near the surface (daily mean)";
+  if (mode === "season") {
+    $("seasonBox").innerHTML = PLACES.map(([k, name]) =>
+      '<div class="pl"><span>' + name + '</span><span class="bar"><i id="b_' + k + '"></i><u style="left:' +
+      (100 * SETTINGS.whoDaily / SETTINGS.placeMax) + '%"></u></span><b id="v_' + k + '"></b></div>').join("") +
+      '<div class="hint">Daily mean smoke PM2.5. White tick: WHO 24-hour guideline (' + SETTINGS.whoDaily + ').</div>';
+  }
+  buildSpark();
+}
+
+function updatePanel(h, fires, storms) {
+  const d = D[mode], m = d.meta, i = Math.min(m.n - 1, Math.round(t)), dt = dateAt(t);
+  const dd = dt.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+  $("when").innerHTML = mode === "event"
+    ? dd + "<small>" + dt.toISOString().slice(11, 16) + " UTC</small>"
+    : dd + "<small>2026</small>";
+  $("slider").value = t;
+  $("vFire").textContent = fires.length ? fmtNum(fires.reduce((a, p) => a + p[2], 0)) + " today" : "";
+  const top = storms.slice().sort((a, b) => (b.wind || 0) - (a.wind || 0))[0];
+  $("vStorm").textContent = top ? top.name + (top.wind ? " " + Math.round(top.wind) + " kt" : "") : "none";
+  if (mode === "event") {
+    $("vArea").innerHTML = fmtNum(m.panel.corridor_smoke_area_km2[i] / 1e6, 2) + " <i>million km²</i>";
+  } else {
+    for (const [k] of PLACES) {
+      const v = m.panel[k][i];
+      $("b_" + k).style.width = Math.min(100, 100 * v / SETTINGS.placeMax) + "%";
+      $("v_" + k).textContent = fmtNum(v, 0);
+    }
+    $("tyTag").classList.toggle("on", !!m.panel.typhoon_day[i]);
+  }
+  const sv = sparkSeries();
+  $("sparkVal").textContent = sv.fmt(sv.v[i]);
+  const cur = $("sparkCur"); if (cur) { const x = 280 * t / (m.n - 1); cur.setAttribute("x1", x); cur.setAttribute("x2", x); }
+}
+
+// ---------- small line chart of the headline number, with a moving cursor ----------
+function sparkSeries() {
+  const m = D[mode].meta;
+  return mode === "event"
+    ? { title: "Corridor smoke area", v: m.panel.corridor_smoke_area_km2, fmt: v => fmtNum(v / 1e6, 2) + "M km²" }
+    : { title: "Corridor smoke", v: m.panel.corridor_smoke, fmt: v => fmtNum(v, 1) + " µg/m³" };
+}
+
+function buildSpark() {
+  const m = D[mode].meta, s = sparkSeries(), n = m.n, W = 280, H = 54;
+  const vals = s.v.map(v => v == null ? NaN : v), max = Math.max(...vals.filter(isFinite)) * 1.08;
+  const X = k => W * k / (n - 1), Y = v => H - 3 - (H - 8) * v / max;
+  let bands = "";
+  if (mode === "season") m.panel.typhoon_day.forEach((on, k) => { if (on) bands += '<rect x="' + (X(k) - W / (2 * (n - 1))) + '" y="0" width="' + (W / (n - 1)) + '" height="' + H + '" fill="rgba(92,200,255,0.16)"/>'; });
+  const pts = vals.map((v, k) => X(k).toFixed(1) + "," + Y(v).toFixed(1)).join(" ");
+  $("spark").innerHTML = bands + '<line x1="0" x2="' + W + '" y1="' + (H - 3) + '" y2="' + (H - 3) + '" stroke="rgba(220,180,130,0.25)" stroke-width="1"/>' +
+    '<polyline points="' + pts + '" fill="none" stroke="#f08c2e" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>' +
+    '<line id="sparkCur" y1="0" y2="' + H + '" stroke="#f1ece4" stroke-width="1.5" vector-effect="non-scaling-stroke"/>';
+  $("sparkTitle").textContent = s.title + (mode === "season" ? " · blue = typhoon days" : "");
+}
+
+function sparkSeek(e, go) {
+  const r = $("spark").getBoundingClientRect(), m = D[mode].meta;
+  const k = Math.max(0, Math.min(m.n - 1, Math.round((e.clientX - r.left) / r.width * (m.n - 1))));
+  const s = sparkSeries(), tip = $("tip");
+  const label = m.times[k].length > 10 ? m.times[k].slice(5) + " UTC" : m.times[k].slice(5);
+  tip.textContent = label + ": " + s.fmt(s.v[k]) + (mode === "season" && m.panel.typhoon_day[k] ? " · typhoon day" : "");
+  tip.style.display = "block"; tip.style.left = (e.clientX + 12) + "px"; tip.style.top = (e.clientY - 30) + "px";
+  if (go) { t = k; playing = false; $("play").textContent = "Play"; }
+}
+
+// ---------- captions ----------
+let capKey = null;
+function updateCaption() {
+  const h = hoursAt(t), d = D[mode];
+  let hit = null;
+  for (const c of SETTINGS.captions[mode]) {
+    const start = (Date.parse(c.at.replace(" ", "T") + (c.at.length > 10 ? ":00Z" : "T00:00:00Z")) - d.t0ms) / 3600000;
+    if (h >= start && h < start + c.hours) hit = c;
+  }
+  const el = $("caption"), key = hit ? hit.text : null;
+  if (key === capKey) return;
+  capKey = key;
+  if (hit) { el.textContent = hit.text; el.classList.toggle("storm", !!hit.storm); el.classList.add("on"); }
+  else el.classList.remove("on");
+}
+
+// ---------- legend, facts, labels ----------
+function buildLegend(legend) {
+  $("ramp").innerHTML = legend.map((s, k) => '<i style="background:rgba(' + s.rgba.slice(0, 3).join(",") + "," + Math.max(0.3, (s.rgba[3] / 255) * (SETTINGS.faintSmoke[k] ?? 1)).toFixed(2) + ')"></i>').join("");
+  const n = legend.length;
+  $("ticks").innerHTML = legend.map((s, k) => [1, 5, 15, 35, 100, 250].includes(s.from) ? '<span style="left:' + (100 * k / n) + '%">' + s.from + "</span>" : "").join("");
+}
+
+$("factList").innerHTML = SETTINGS.facts.map(([b, s]) => '<div class="fig"><b>' + b + "</b><span>" + s + "</span></div>").join("");
+
+// ---------- controls ----------
+let lastKey = null, idle = 0;
+function tick(now) {
+  if (last !== null && playing && D[mode]) {
+    t += (now - last) / 1000 * SETTINGS.framesPerSecond[mode];
+    if (t > D[mode].meta.n - 1) t = 0;
+  }
+  last = now;
+  // draw only when something changed (saves battery when paused); the smoke canvas keeps updating a few frames longer
+  const src = map.getSource("smoke");
+  if (D[mode] && src) {
+    const key = mode + ":" + t;
+    if (key !== lastKey) { render(); lastKey = key; idle = 0; src.play(); }
+    else if (++idle === 4) src.pause();
+  }
+  requestAnimationFrame(tick);
+}
+
+let wanted = mode;
+async function setMode(m) {
+  wanted = m;
+  $("mEvent").textContent = "Choi-wan event"; $("mSeason").textContent = "2026 season";
+  if (m === mode) return;
+  $(m === "event" ? "mEvent" : "mSeason").textContent += " …";
+  const d = await loadMode(m);
+  if (wanted !== m) return;          // another button was pressed while this set was loading
+  $("mEvent").textContent = "Choi-wan event"; $("mSeason").textContent = "2026 season";
+  mode = m;
+  canvas.width = d.images[0].width; canvas.height = d.images[0].height;
+  t = 0; capKey = null;
+  map.getSource("smoke").setCoordinates(smokeCorners(d.meta.bounds));
+  buildPanel();
+}
+
+$("play").onclick = e => { playing = !playing; e.target.textContent = playing ? "Pause" : "Play"; };
+$("slider").oninput = e => { t = +e.target.value; };
+$("mEvent").onclick = () => setMode("event");
+$("mSeason").onclick = () => setMode("season");
+$("spark").addEventListener("mousemove", e => sparkSeek(e, false));
+$("spark").addEventListener("mouseleave", () => { $("tip").style.display = "none"; });
+$("spark").addEventListener("click", e => sparkSeek(e, true));
+
+loadMode(mode);   // start fetching the data straight away, while the map is still setting up
+async function init() {   // runs as soon as the map style is ready (not on "load", which waits for every basemap tile)
+  const d = await loadMode(mode);
+  canvas.width = d.images[0].width; canvas.height = d.images[0].height;
+  drawSmoke();
+  map.addSource("smoke", { type: "canvas", canvas, animate: true, coordinates: smokeCorners(d.meta.bounds) });
+  map.addLayer({ id: "smoke", type: "raster", source: "smoke", paint: { "raster-opacity": SETTINGS.smokeOpacity, "raster-fade-duration": 0, "raster-resampling": "linear" } });
+  map.addControl(overlay);
+  buildLegend(d.meta.legend);
+  buildPanel();
+  for (const [lon, lat, name, off, onPhone] of SETTINGS.labels) {
+    if (isPhone && onPhone === false) continue;
+    const el = document.createElement("div"); el.className = "lbl";
+    const s = document.createElement("span"); s.textContent = name; s.style.display = "inline-block";
+    s.style.transform = "translate(" + off[0] + "px," + off[1] + "px)"; el.appendChild(s);
+    new maplibregl.Marker({ element: el, anchor: "left" }).setLngLat([lon, lat]).addTo(map);
+  }
+  if (SETTINGS.showCorridor) {
+    const el = document.createElement("div"); el.className = "lbl box"; el.textContent = "Pacific corridor";
+    new maplibregl.Marker({ element: el, anchor: "bottom-left", offset: [4, -2] }).setLngLat([SETTINGS.corridor[0], SETTINGS.corridor[3]]).addTo(map);
+  }
+  if (!isPhone) $("facts").open = true;
+  else document.querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");   // start with the credits folded away
+  if (q.has("t")) { t = +q.get("t"); playing = false; $("play").textContent = "Play"; }
+  if (q.has("h")) t = Math.min(D[mode].meta.n - 1, +q.get("h") / D[mode].meta.step_hours);   // coming from the 3D page: same moment
+  if (q.has("paused")) { playing = false; $("play").textContent = "Play"; }
+  loadMode(mode === "event" ? "season" : "event");   // fetch the other set in the background
+  requestAnimationFrame(tick);
+  window.__ready = true;
+}
+if (map.isStyleLoaded()) init(); else map.once("style.load", init);
+</script>
+</body>
+</html>

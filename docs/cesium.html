@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smoke in the Typhoon Zone (3D)</title>
+<meta name="description" content="3D globe of the 2026 Indonesian fire haze reaching the western Pacific typhoon zone, with Super Typhoon Choi-wan.">
+<script>window.CESIUM_BASE_URL = "https://cdn.jsdelivr.net/npm/cesium@1.146.0/Build/Cesium/";</script>
+<script src="https://cdn.jsdelivr.net/npm/cesium@1.146.0/Build/Cesium/Cesium.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cesium@1.146.0/Build/Cesium/Widgets/widgets.css">
+<style>
+  :root {
+    --space: #070a10;
+    --panel: rgba(16, 18, 24, 0.82);
+    --line: rgba(220, 180, 130, 0.22);
+    --text: #f1ece4;
+    --muted: #a69c8f;
+    --haze: #f08c2e;
+    --storm: #5cc8ff;
+    --fire: #ff5a3c;
+  }
+  html, body, #globe { margin: 0; width: 100%; height: 100%; background: var(--space); overflow: hidden;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .panel { position: absolute; left: 16px; top: 16px; width: 296px; padding: 14px 16px; color: var(--text); box-sizing: border-box;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; backdrop-filter: blur(6px); }
+  h1 { font-size: 18px; margin: 0 0 4px; letter-spacing: 0.02em; }
+  .sub { font-size: 12px; color: var(--muted); margin: 0 0 10px; line-height: 1.4; }
+  .switch { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: 10px; }
+  .switch button { flex: 1; border: 0; border-radius: 0; background: transparent; color: var(--muted); padding: 7px 6px; }
+  .switch button.on { background: rgba(240, 140, 46, 0.22); color: var(--text); }
+  .when { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; margin-bottom: 4px; }
+  .when small { font-size: 15px; font-weight: 500; color: var(--muted); margin-left: 6px; }
+  .legend { margin: 8px 0 4px; }
+  .legend .ramp { display: flex; height: 10px; border-radius: 3px; overflow: hidden; }
+  .legend .ramp i { flex: 1; }
+  .legend .ticks { position: relative; height: 14px; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .legend .ticks span { position: absolute; transform: translateX(-50%); top: 2px; }
+  .legend .cap { font-size: 11px; color: var(--muted); }
+  .row { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 13px; }
+  .sw { width: 22px; height: 4px; border-radius: 2px; flex: none; }
+  .sw.dot { width: 9px; height: 9px; border-radius: 50%; margin: 0 6px 0 7px; }
+  .val { margin-left: auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .val i { font-style: normal; color: var(--muted); font-size: 11px; }
+  .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  button { background: #2a2118; color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 10px; font: inherit; font-size: 12px; cursor: pointer; }
+  .btns button.on { background: #4a321c; border-color: var(--haze); }
+  .note { font-size: 11px; color: var(--muted); margin-top: 10px; line-height: 1.4; }
+  .note a { color: var(--muted); }
+  .caption { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); max-width: 560px; width: calc(100% - 700px);
+    min-width: 320px; padding: 12px 16px; color: var(--text); background: var(--panel); border: 1px solid var(--line); box-sizing: border-box;
+    border-left: 3px solid var(--haze); border-radius: 10px; font-size: 15px; line-height: 1.45;
+    opacity: 0; transition: opacity 0.4s; pointer-events: none; }
+  .caption.on { opacity: 1; }
+  .caption.storm { border-left-color: var(--storm); }
+  .phone { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; flex-direction: column;
+    background: var(--space); color: var(--text); padding: 24px; text-align: center; font-size: 15px; line-height: 1.5; }
+  .phone a { color: var(--haze); }
+  .viewtile { position: absolute; right: 16px; bottom: 46px; width: 104px; height: 104px; border-radius: 12px; overflow: hidden;
+    border: 1px solid var(--line); background: #0a1424; cursor: pointer; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5); color: var(--text);
+    text-decoration: none; transition: transform 0.15s, border-color 0.15s; z-index: 3; }
+  .viewtile:hover { transform: scale(1.05); border-color: var(--haze); }
+  .viewtile canvas { width: 100%; height: 100%; display: block; }
+  .viewtile span { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 9px 7px; font-size: 13px; font-weight: 600;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.8)); display: flex; justify-content: space-between; }
+  @media (max-width: 768px) { .viewtile { display: none; } }
+  @media (max-width: 768px) { .phone { display: flex; } .panel, .caption { display: none; } }
+</style>
+</head>
+<body>
+<div id="globe"></div>
+<div class="panel">
+  <h1>Smoke in the Typhoon Zone</h1>
+  <p class="sub">The 2026 Indonesian fire haze reaching the western Pacific, where typhoons form and travel.</p>
+  <div class="switch">
+    <button id="mEvent" class="on">Choi-wan event</button>
+    <button id="mSeason">2026 season</button>
+  </div>
+  <div class="when" id="when"></div>
+  <div class="legend">
+    <div class="ramp" id="ramp"></div>
+    <div class="ticks" id="ticks"></div>
+    <div class="cap">Smoke PM2.5 near the ground (micrograms per m³, GEOS-FP model)</div>
+  </div>
+  <div class="row"><span class="sw dot" style="background:var(--fire)"></span>Fire hotspots<span class="val" id="vFire"></span></div>
+  <div class="row"><span class="sw" style="background:rgba(255,255,255,0.75)"></span><span id="windTxt"></span></div>
+  <div class="row"><span class="sw" style="background:var(--storm)"></span>Storm tracks<span class="val" id="vStorm"></span></div>
+  <div class="row"><span class="sw" style="background:#ffd7a8; height:2px"></span><span id="vNumTxt"></span><span class="val" id="vNum"></span></div>
+  <div class="btns">
+    <button id="bOverview">Overview</button>
+    <button id="bStreamer">Along the streamer</button>
+    <button id="bFollow">Follow the storm</button>
+    <button id="bStraits">KL and Singapore</button>
+  </div>
+  <div class="note">Use the controls at the bottom to play, pause, change speed or jump to any time.
+    Smoke: NASA GEOS-FP (reads about 1.8 times higher than Singapore's monitors). Wind: ERA5. Fires: NASA FIRMS. Storms: IBTrACS.
+    <br><a href="index.html">Map version with the numbers</a></div>
+</div>
+<div class="caption" id="caption"></div>
+<a class="viewtile" id="viewTile" href="index.html" title="Open the same moment on the map page, with the numbers"><canvas id="tileCanvas" width="208" height="208"></canvas><span>Map view<b>↗</b></span></a>
+<div class="phone">This 3D view is made for desktop screens.<br><a href="index.html">Open the map version</a></div>
+<script>
+// ---------- Section 0: settings ----------
+const SETTINGS = {
+  ionToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJub25jZSI6ImFjZjR1NzFPeEZiU3oxZm4iLCJqdGkiOiJiMzMxNTg0OS1kNWJiLTQwMmQtYWFkNi04YWNjODU5ZWQ4MTkiLCJpZCI6NTM3MTk1LCJzdWIiOiJsaWtyZW50YWkiLCJpc3MiOiJodHRwczovL2FwaS5jZXNpdW0uY29tIiwiYXVkIjoic2thcmN0aWNyb3V0ZSIsImlhdCI6MTc5MzE5MTk1OX0.HOLLoMbdXFtOaju8AmqNGVifLScbqUPIBYKSYCGBrlg", // <- Cesium ion access token
+  imagery: "bing",                   // <- "bing" or "sentinel" (Cesium ion, need the token), "bluemarble" (NASA, no account) or "naturalearth" (built in)
+  startMode: "event",                // <- "event" or "season"
+  framesPerSecond: { event: 2, season: 0.5 },   // <- animation speed, as on the map page (also adjustable with the dial at the bottom left)
+  windTrailHours: { event: 6, season: 16 },     // <- VISUAL: length of each moving wind streak, in hours
+  windColor: "rgba(255, 255, 255, 0.6)",        // <- VISUAL
+  windWidth: 1.5,                    // <- VISUAL: pixels
+  windHeight: 15000,                 // <- VISUAL: wind streaks float this many metres above the ground (they are drawn over the smoke)
+  smokeHeight: 3000,                 // <- VISUAL: the smoke sheet floats this many metres above the ground
+  faintSmoke: [0.25, 0.5, 0.8],      // <- VISUAL: as on the map page
+  edgeFade: 3,                       // <- VISUAL: as on the map page
+  fireColor: "#ff5a3c",              // <- VISUAL
+  firePixels: [2, 6],                // <- VISUAL: smallest and largest hotspot dot
+  stormColor: "#5cc8ff",             // <- VISUAL
+  stormKeepHours: 36,                // <- how long a storm stays on the globe after its last track point
+  corridor: [128, 150, 3, 18],       // <- the Pacific corridor box (west, east, south, north)
+  overview: { lon: 124, lat: 4, height: 9000000 },                                      // <- start view
+  streamerView: { lon: 123, lat: -13, height: 3400000, heading: 30, pitch: -62 },       // <- "Along the streamer": low view from eastern Indonesia towards the storms
+  straitsView: { lon: 103.5, lat: -7, height: 1100000, heading: 0, pitch: -48 },        // <- "KL and Singapore"
+  followFrom: [-900000, -1300000, 900000],                                               // <- VISUAL: camera offset when following the storm (metres east, north, up)
+  labels: [                          // <- place names (lon, lat, name)
+    [101.3, -1.8, "Sumatra"], [113.5, -1.0, "Kalimantan"], [101.7, 3.15, "Kuala Lumpur"], [103.8, 1.35, "Singapore"], [128.0, -4.0, "Eastern Indonesia"],
+  ],
+  captions: {                        // <- as on the map page
+    event: [
+      { at: "2026-09-28 01:30", hours: 15, text: "Late September: fires burn across Sumatra, Kalimantan and eastern Indonesia. Smoke already lies over the seas between them." },
+      { at: "2026-09-30 01:30", hours: 15, storm: true, text: "A new storm forms east of the Philippines. It will become Super Typhoon Choi-wan." },
+      { at: "2026-10-02 04:30", hours: 18, text: "Winds turn towards the storm. Smoke from eastern Indonesia streams north-east over the open Pacific." },
+      { at: "2026-10-03 07:30", hours: 15, storm: true, text: "3 October: the smoke streamer is drawn into Choi-wan's circulation, the scene seen on earth.nullschool.net." },
+      { at: "2026-10-04 13:30", hours: 12, storm: true, text: "Choi-wan peaks at 134 kt. The smoke edge comes within about 200 km of its centre." },
+      { at: "2026-10-05 22:30", hours: 18, text: "Smoke covers 2.7 million km² of the Pacific corridor, more than twice the area at the start." },
+    ],
+    season: [
+      { at: "2026-08-01", hours: 120, text: "August 2026: a strong El Niño and a dry season. Fires start to spread across Indonesia." },
+      { at: "2026-08-25", hours: 120, text: "Smoke builds over Sumatra, Kalimantan, Kuala Lumpur and Singapore." },
+      { at: "2026-09-15", hours: 120, storm: true, text: "Each typhoon in the Philippine Sea pulls air, and smoke, north-east from eastern Indonesia. On typhoon days, 29% more smoke flows into the corridor." },
+      { at: "2026-10-03", hours: 96, storm: true, text: "Choi-wan draws the eastern Indonesian smoke into the Pacific." },
+      { at: "2026-10-11", hours: 168, text: "Mid October: the worst days for Kuala Lumpur and Singapore, and for the Pacific corridor too." },
+    ],
+  },
+};
+// -----------------------------------------
+
+const q = new URLSearchParams(location.search);
+const isPhone = window.innerWidth <= 768 && !q.has("desktop");  // ?desktop=1 in the address skips this check (for testing)
+if (!isPhone && window.innerWidth <= 768) document.querySelector(".phone").remove();
+const imagery = q.get("imagery") || SETTINGS.imagery;  // ?imagery=bluemarble etc. overrides the setting, handy for testing
+let mode = q.get("mode") === "season" || q.get("mode") === "event" ? q.get("mode") : SETTINGS.startMode;
+const $ = id => document.getElementById(id);
+const HOUR = 3600;
+const fmtNum = (v, dp = 0) => v == null ? "-" : Number(v).toLocaleString("en-GB", { maximumFractionDigits: dp, minimumFractionDigits: dp });
+
+function blueMarble() {
+  return new Cesium.ImageryLayer(new Cesium.UrlTemplateImageryProvider({
+    url: "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg",
+    tilingScheme: new Cesium.WebMercatorTilingScheme(), maximumLevel: 8,
+    credit: new Cesium.Credit('<a href="https://www.earthdata.nasa.gov/gibs" target="_blank">Imagery: NASA Blue Marble via GIBS</a>') }));
+}
+
+function baseLayer() {
+  if ((imagery === "bing" || imagery === "sentinel") && SETTINGS.ionToken && SETTINGS.ionToken !== "TOKEN_HERE") {
+    Cesium.Ion.defaultAccessToken = SETTINGS.ionToken;
+    const layer = Cesium.ImageryLayer.fromProviderAsync(Cesium.IonImageryProvider.fromAssetId(imagery === "bing" ? 2 : 3954));
+    layer.errorEvent.addEventListener(() => {  // a wrong or restricted token: fall back to NASA imagery
+      console.warn("Cesium ion imagery failed to load; using NASA Blue Marble instead.");
+      viewer.imageryLayers.remove(layer);
+      viewer.imageryLayers.add(blueMarble(), 0);
+    });
+    return layer;
+  }
+  if (imagery === "naturalearth") {
+    return Cesium.ImageryLayer.fromProviderAsync(Cesium.TileMapServiceImageryProvider.fromUrl(Cesium.buildModuleUrl("Assets/Textures/NaturalEarthII")));
+  }
+  return blueMarble();
+}
+
+let viewer = null;
+if (!isPhone) {
+  viewer = new Cesium.Viewer("globe", {
+    baseLayer: baseLayer(), baseLayerPicker: false, geocoder: false, homeButton: false, sceneModePicker: false,
+    navigationHelpButton: false, fullscreenButton: true, infoBox: false, selectionIndicator: false,
+    animation: true, timeline: true, shouldAnimate: !(q.has("t") || q.has("paused")),
+    orderIndependentTranslucency: false,  // keeps the see-through smoke sheet from being blended over the names
+  });
+  viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#0a1424");
+  viewer.scene.globe.enableLighting = false;
+  viewer.scene.skyAtmosphere.show = true;
+  viewer.scene.globe.showGroundAtmosphere = true;
+}
+
+// ---------- the "Map view" tile: a small flat map with the current smoke and a hint of the number panel ----------
+const tileCtx = $("tileCanvas").getContext("2d");
+function drawTile(img) {
+  const g = tileCtx, W = 208;
+  g.fillStyle = "#13304e"; g.fillRect(0, 0, W, W);
+  g.drawImage(img, 0, 0, W, W);
+  g.fillStyle = "rgba(16, 18, 24, 0.85)";
+  g.beginPath(); g.roundRect(12, 14, 62, 92, 8); g.fill();
+  g.fillStyle = "#f08c2e";
+  [[34], [48], [22], [40]].forEach(([w], k) => { g.beginPath(); g.roundRect(20, 26 + k * 18, w, 7, 3.5); g.fill(); });
+}
+$("viewTile").addEventListener("click", e => {
+  if (!viewer || !viewer.clock) return;
+  e.preventDefault();
+  const c = viewer.clock, h = Cesium.JulianDate.secondsDifference(c.currentTime, c.startTime) / 3600;
+  location.href = "index.html?mode=" + mode + "&h=" + h.toFixed(2) + (c.shouldAnimate ? "" : "&paused=1");
+});
+
+// ---------- data: the same files as the map page ----------
+function soften(im, meta) {   // the faintest smoke more see-through, and faded towards the edge of the data area (as on the map page)
+  const c = document.createElement("canvas"); c.width = im.width; c.height = im.height;
+  const g = c.getContext("2d", { willReadFrequently: true }); g.drawImage(im, 0, 0);
+  const px = g.getImageData(0, 0, c.width, c.height), a = px.data;
+  const mult = {}; SETTINGS.faintSmoke.forEach((m, k) => { mult[meta.legend[k].rgba[3]] = m; });
+  const b = meta.bounds, fx = SETTINGS.edgeFade / ((b.east - b.west) / c.width), fy = SETTINGS.edgeFade / ((b.north - b.south) / c.height);
+  for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) {
+    const o = (y * c.width + x) * 4, al = a[o + 3];
+    if (!al) continue;
+    const edge = Math.min(1, Math.min(x, c.width - 1 - x) / fx, Math.min(y, c.height - 1 - y) / fy);
+    a[o + 3] = Math.round(al * (mult[al] ?? 1) * edge);
+  }
+  g.putImageData(px, 0, 0);
+  return c;
+}
+
+const loading = {};
+function loadMode(m) { return loading[m] || (loading[m] = fetchMode(m)); }
+async function fetchMode(m) {
+  const base = "data/" + m + "/";
+  const [meta, wind, fires] = await Promise.all(["meta", "wind", "fires"].map(k => fetch(base + k + ".json").then(r => r.json())));
+  for (const st of meta.storms) st.name = st.name.replace(/-(\w)/g, (_, c) => "-" + c.toLowerCase());
+  const raw = await Promise.all(meta.times.map((_, i) => new Promise((ok, bad) => {
+    const im = new Image(); im.onload = () => ok(im); im.onerror = bad; im.src = base + "smoke_" + String(i).padStart(3, "0") + ".png";
+  })));
+  return { meta, wind, fires, images: raw.map(im => soften(im, meta)),
+    fireMax: Math.max(1, ...Object.values(fires).flat().map(p => p[2])) };
+}
+
+async function start() {
+  const scene = viewer.scene, clock = viewer.clock;
+  const stormCol = Cesium.Color.fromCssColorString(SETTINGS.stormColor);
+
+  // ---- smoke: one sheet with a material that blends the two nearest pictures
+  const blank = document.createElement("canvas"); blank.width = blank.height = 1;
+  const smokeMat = new Cesium.Material({ fabric: {
+    uniforms: { imageA: blank, imageB: blank, mixAB: 0.0 },
+    source: `czm_material czm_getMaterial(czm_materialInput materialInput) {
+      czm_material m = czm_getDefaultMaterial(materialInput);
+      vec4 a = texture(imageA, materialInput.st);
+      vec4 b = texture(imageB, materialInput.st);
+      float alpha = mix(a.a, b.a, mixAB);
+      vec3 rgb = (a.rgb * a.a * (1.0 - mixAB) + b.rgb * b.a * mixAB) / max(alpha, 0.001);
+      m.diffuse = rgb;
+      m.alpha = alpha;
+      return m;
+    }` } });
+  let smokeSheet = null, shownA = -1, shownB = -1;
+  function smokeRect(b) {
+    if (smokeSheet) scene.primitives.remove(smokeSheet);
+    smokeSheet = scene.primitives.add(new Cesium.Primitive({
+      geometryInstances: new Cesium.GeometryInstance({ geometry: new Cesium.RectangleGeometry({
+        rectangle: Cesium.Rectangle.fromDegrees(b.west, b.south, b.east, b.north), height: SETTINGS.smokeHeight,
+        granularity: Cesium.Math.toRadians(0.5), vertexFormat: Cesium.EllipsoidSurfaceAppearance.VERTEX_FORMAT }) }),
+      appearance: new Cesium.EllipsoidSurfaceAppearance({ material: smokeMat, aboveGround: true, translucent: true }),
+      asynchronous: false }));
+    shownA = shownB = -1;
+  }
+
+  // ---- wind: every group of streaks that start together shares one material, whose moving bright "head" makes them flow
+  const windCol = Cesium.Color.fromCssColorString(SETTINGS.windColor);
+  let windGroups = [];
+  function windMaterial() {
+    return new Cesium.Material({ fabric: {
+      uniforms: { color: windCol, head: -1.0, len: 0.3 },
+      source: `czm_material czm_getMaterial(czm_materialInput materialInput) {
+        czm_material m = czm_getDefaultMaterial(materialInput);
+        float d = head - materialInput.st.s;
+        float a = (d >= 0.0 && d <= len) ? 1.0 - d / len : 0.0;
+        m.diffuse = color.rgb;
+        m.alpha = color.a * a;
+        return m;
+      }` } });
+  }
+  function buildWind(d) {
+    for (const g of windGroups) scene.primitives.remove(g.lines);
+    windGroups = [];
+    const byKey = {};
+    const step = d.wind.step_hours;
+    for (const [t0, xy] of d.wind.trails) {
+      const n = xy.length / 2;
+      if (n < 2) continue;
+      const key = t0 + "|" + n;
+      let g = byKey[key];
+      if (!g) {
+        g = byKey[key] = { t0, dur: (n - 1) * step, mat: windMaterial(), lines: new Cesium.PolylineCollection() };
+        g.lines.show = false;
+        windGroups.push(g);
+        scene.primitives.add(g.lines);
+      }
+      const pos = [];
+      for (let k = 0; k < xy.length; k += 2) pos.push(Cesium.Cartesian3.fromDegrees(xy[k], xy[k + 1], SETTINGS.windHeight));
+      g.lines.add({ positions: pos, width: SETTINGS.windWidth, material: g.mat });
+    }
+  }
+  function updateWind(h) {
+    const trail = SETTINGS.windTrailHours[mode];
+    for (const g of windGroups) {
+      const on = h >= g.t0 && h <= g.t0 + g.dur + trail;
+      g.lines.show = on;
+      if (on) { g.mat.uniforms.head = (h - g.t0) / g.dur; g.mat.uniforms.len = trail / g.dur; }
+    }
+  }
+
+  // ---- fires: dots for the current day
+  const fireDots = scene.primitives.add(new Cesium.PointPrimitiveCollection());
+  const fireCol = Cesium.Color.fromCssColorString(SETTINGS.fireColor).withAlpha(0.8);
+  let fireDay = null;
+  function updateFires(d, day) {
+    if (day === fireDay) return;
+    fireDay = day;
+    fireDots.removeAll();
+    const list = d.fires[day] || [];
+    const [p0, p1] = SETTINGS.firePixels;
+    for (const p of list) fireDots.add({ position: Cesium.Cartesian3.fromDegrees(p[0], p[1], 5000), color: fireCol,
+      pixelSize: p0 + (p1 - p0) * Math.sqrt(p[2] / d.fireMax) });
+    $("vFire").textContent = list.length ? fmtNum(list.reduce((a, p) => a + p[2], 0)) + " today" : "";
+  }
+
+  // ---- storms: a moving dot and name, the track so far, and the whole track faintly
+  let stormEnts = [];
+  function buildStorms(d, t0) {
+    for (const e of stormEnts) viewer.entities.remove(e);
+    stormEnts = [];
+    const at = hh => Cesium.JulianDate.addSeconds(t0, hh * HOUR, new Cesium.JulianDate());
+    for (const s of d.meta.storms) {
+      const T = s.t_hours, last = T.length - 1;
+      const pos = new Cesium.SampledPositionProperty();
+      T.forEach((hh, i) => pos.addSample(at(hh), Cesium.Cartesian3.fromDegrees(s.lon[i], s.lat[i], 25000)));
+      const windAt = time => {
+        const hh = Cesium.JulianDate.secondsDifference(time, t0) / HOUR;
+        let k = 0; while (k < last && T[k + 1] <= hh) k++;
+        return s.wind_kt[k];
+      };
+      const live = new Cesium.TimeIntervalCollection([new Cesium.TimeInterval({ start: at(T[0]), stop: at(T[last]) })]);
+      const ent = viewer.entities.add({ name: s.name, availability: live, position: pos,
+        point: { pixelSize: 10, color: Cesium.Color.WHITE, outlineColor: stormCol, outlineWidth: 3, disableDepthTestDistance: Number.POSITIVE_INFINITY },
+        label: { text: new Cesium.CallbackProperty(time => { const w = windAt(time); return s.name + (w ? " " + Math.round(w) + " kt" : ""); }, false),
+          font: "600 13px system-ui, sans-serif", fillColor: Cesium.Color.fromCssColorString("#d8f2ff"), outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE, pixelOffset: new Cesium.Cartesian2(12, -12),
+          horizontalOrigin: Cesium.HorizontalOrigin.LEFT, disableDepthTestDistance: Number.POSITIVE_INFINITY } });
+      ent.maxWind = s.max_wind_kt;
+      ent.windAt = windAt;
+      stormEnts.push(ent);
+      const shown = new Cesium.TimeIntervalCollection([new Cesium.TimeInterval({ start: at(T[0]), stop: at(T[last] + SETTINGS.stormKeepHours) })]);
+      const all = T.map((_, i) => Cesium.Cartesian3.fromDegrees(s.lon[i], s.lat[i], 20000));
+      const scratch = [];
+      stormEnts.push(viewer.entities.add({ availability: shown, polyline: { width: 2.5, arcType: Cesium.ArcType.NONE, material: stormCol.withAlpha(0.8),
+        positions: new Cesium.CallbackProperty(time => {
+          const hh = Cesium.JulianDate.secondsDifference(time, t0) / HOUR;
+          scratch.length = 0;
+          for (let i = 0; i <= last && T[i] <= hh; i++) scratch.push(all[i]);
+          if (scratch.length < last + 1 && scratch.length) { const p = pos.getValue(time); if (p) scratch.push(p); }
+          return scratch;
+        }, false) } }));
+    }
+  }
+
+  // ---- corridor box and place names
+  const [cw, ce, cs, cn] = SETTINGS.corridor;
+  viewer.entities.add({ polyline: { positions: Cesium.Cartesian3.fromDegreesArrayHeights([cw, cs, 8000, ce, cs, 8000, ce, cn, 8000, cw, cn, 8000, cw, cs, 8000]),
+    width: 1.5, material: new Cesium.PolylineDashMaterialProperty({ color: Cesium.Color.fromCssColorString("#ffd7a8").withAlpha(0.7), dashLength: 12 }) } });
+  const horizon = new Cesium.EllipsoidalOccluder(Cesium.Ellipsoid.WGS84, viewer.camera.positionWC);
+  scene.preRender.addEventListener(() => { horizon.cameraPosition = viewer.camera.positionWC; });
+  const name = (lon, lat, text, color, size) => {
+    const pos = Cesium.Cartesian3.fromDegrees(lon, lat, 20000);
+    viewer.entities.add({ position: pos, label: { text, font: size + "px system-ui, sans-serif", fillColor: color, outlineColor: Cesium.Color.BLACK,
+      outlineWidth: 3, style: Cesium.LabelStyle.FILL_AND_OUTLINE, horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+      distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2.2e7), disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      show: new Cesium.CallbackProperty(() => horizon.isPointVisible(pos), false) } });
+  };
+  for (const [lon, lat, text] of SETTINGS.labels) name(lon, lat, text, Cesium.Color.WHITE, 12);
+  name(cw + 4, cn + 0.8, "Pacific corridor", Cesium.Color.fromCssColorString("#ffd7a8"), 11);
+
+  // ---- switching between the event and the season
+  let D = null, t0 = null;
+  async function setMode(m, startHours) {
+    $("mEvent").classList.toggle("on", m === "event");
+    $("mSeason").classList.toggle("on", m === "season");
+    const d = await loadMode(m);
+    if ((m === "event") !== $("mEvent").classList.contains("on")) return;   // another button was pressed meanwhile
+    mode = m; D = d;
+    const meta = d.meta;
+    t0 = Cesium.JulianDate.fromIso8601(meta.start + "Z");
+    const tEnd = Cesium.JulianDate.addSeconds(t0, (meta.n - 1) * meta.step_hours * HOUR, new Cesium.JulianDate());
+    clock.startTime = t0.clone();
+    clock.stopTime = tEnd.clone();
+    clock.currentTime = Cesium.JulianDate.addSeconds(t0, (startHours || 0) * HOUR, new Cesium.JulianDate());
+    clock.clockRange = Cesium.ClockRange.LOOP_STOP;
+    clock.multiplier = SETTINGS.framesPerSecond[m] * meta.step_hours * HOUR;
+    viewer.timeline.zoomTo(t0, tEnd);
+    smokeRect(meta.bounds);
+    buildWind(d);
+    buildStorms(d, t0);
+    fireDay = null;
+    $("windTxt").textContent = m === "event" ? "Wind at 850 hPa (about 1.5 km up)" : "Wind near the surface (daily mean)";
+    $("vNumTxt").textContent = m === "event" ? "Smoke area, Pacific corridor" : "Smoke in the Pacific corridor";
+    shownCaption = undefined;
+    viewer.trackedEntity = undefined;
+  }
+
+  // ---- every tick: smoke picture, wind, fires, panel, caption
+  let shownCaption;
+  clock.onTick.addEventListener(c => {
+    if (!D) return;
+    const meta = D.meta;
+    const h = Math.max(0, Cesium.JulianDate.secondsDifference(c.currentTime, t0) / HOUR);
+    const tt = Math.min(meta.n - 1, h / meta.step_hours);
+    const i = Math.floor(tt), j = Math.min(meta.n - 1, i + 1);
+    if (i !== shownA) { smokeMat.uniforms.imageA = D.images[i]; shownA = i; drawTile(D.images[i]); }
+    if (j !== shownB) { smokeMat.uniforms.imageB = D.images[j]; shownB = j; }
+    smokeMat.uniforms.mixAB = tt - i;
+    updateWind(h);
+    const date = Cesium.JulianDate.toDate(c.currentTime);
+    updateFires(D, date.toISOString().slice(0, 10));
+    const dd = date.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+    $("when").innerHTML = dd + "<small>" + (mode === "event" ? date.toISOString().slice(11, 16) + " UTC" : "2026") + "</small>";
+    const k = Math.round(tt);
+    $("vNum").innerHTML = mode === "event" ? fmtNum(meta.panel.corridor_smoke_area_km2[k] / 1e6, 2) + " <i>million km²</i>"
+      : fmtNum(meta.panel.corridor_smoke[k], 1) + " <i>µg/m³</i>";
+    const live = stormEnts.filter(e => e.windAt && e.isAvailable(c.currentTime));
+    const top = live.sort((a, b) => (b.windAt(c.currentTime) || 0) - (a.windAt(c.currentTime) || 0))[0];
+    $("vStorm").textContent = top ? top.name + (top.windAt(c.currentTime) ? " " + Math.round(top.windAt(c.currentTime)) + " kt" : "") : "none";
+    let pick = null;
+    for (const cap of SETTINGS.captions[mode]) {
+      const s = (Date.parse(cap.at.replace(" ", "T") + (cap.at.length > 10 ? ":00Z" : "T00:00:00Z")) - Date.parse(meta.start + "Z")) / 3.6e6;
+      if (h >= s && h < s + cap.hours) pick = cap;
+    }
+    if (pick !== shownCaption) {
+      shownCaption = pick;
+      const el = $("caption");
+      if (pick) { el.textContent = pick.text; el.classList.toggle("storm", !!pick.storm); el.classList.add("on"); }
+      else el.classList.remove("on");
+    }
+  });
+
+  // ---- camera
+  const buttons = { overview: "bOverview", streamer: "bStreamer", follow: "bFollow", straits: "bStraits" };
+  const mark = which => Object.entries(buttons).forEach(([k, id]) => $(id).classList.toggle("on", k === which));
+  const fly = (v, which) => {
+    viewer.trackedEntity = undefined;
+    viewer.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(v.lon, v.lat, v.height),
+      orientation: { heading: Cesium.Math.toRadians(v.heading || 0), pitch: Cesium.Math.toRadians(v.pitch || -90), roll: 0 },
+      duration: q.has("t") || q.has("h") ? 0 : 2 });
+    mark(which);
+  };
+  const follow = () => {   // the strongest storm on the globe right now (Choi-wan during the event)
+    const now = clock.currentTime;
+    const live = stormEnts.filter(e => e.windAt && e.isAvailable(now));
+    const pickE = live.sort((a, b) => (b.windAt(now) || 0) - (a.windAt(now) || 0))[0]
+      || stormEnts.filter(e => e.windAt).sort((a, b) => b.maxWind - a.maxWind)[0];
+    if (!pickE) return;
+    if (!pickE.isAvailable(now)) clock.currentTime = pickE.availability.start.clone();
+    pickE.viewFrom = new Cesium.Cartesian3(...SETTINGS.followFrom);
+    viewer.trackedEntity = pickE;
+    mark("follow");
+  };
+  $("bOverview").onclick = () => fly(SETTINGS.overview, "overview");
+  $("bStreamer").onclick = () => fly(SETTINGS.streamerView, "streamer");
+  $("bStraits").onclick = () => fly(SETTINGS.straitsView, "straits");
+  $("bFollow").onclick = follow;
+  $("mEvent").onclick = () => setMode("event").then(() => mark(null));
+  $("mSeason").onclick = () => setMode("season").then(() => mark(null));
+
+  // ---- legend and start
+  await setMode(mode, q.has("h") ? +q.get("h") : q.has("t") ? +q.get("t") : 0);   // h: hours from the start, as sent by the map page
+  const legend = D.meta.legend;
+  $("ramp").innerHTML = legend.map((s, k) => '<i style="background:rgba(' + s.rgba.slice(0, 3).join(",") + "," +
+    Math.max(0.3, (s.rgba[3] / 255) * (SETTINGS.faintSmoke[k] ?? 1)).toFixed(2) + ')"></i>').join("");
+  $("ticks").innerHTML = legend.map((s, k) => [1, 5, 15, 35, 100, 250].includes(s.from) ? '<span style="left:' + (100 * k / legend.length) + '%">' + s.from + "</span>" : "").join("");
+  const view = q.get("view");
+  if (view === "streamer") fly(SETTINGS.streamerView, "streamer");
+  else if (view === "straits") fly(SETTINGS.straitsView, "straits");
+  else if (view === "follow") follow();
+  else fly(SETTINGS.overview, "overview");
+  loadMode(mode === "event" ? "season" : "event");   // fetch the other set in the background
+  window.__ready = true;
+}
+
+if (viewer) start();
+</script>
+</body>
+</html>
